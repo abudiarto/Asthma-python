@@ -16,10 +16,12 @@ all_vocab = pickle.load(open('../SeqModel/SeqChunks/vocab_1.sav', 'rb'))
 for file in chunk_files:
     print(file)
     print(chunk)
-    if (file != '../SeqModel/SeqChunks/vocab_1.sav') & (chunk < 5):
+    if (file != '../SeqModel/SeqChunks/vocab_1.sav') & (chunk < 25):
         temp = pickle.load(open(file, 'rb'))
         all_vocab = list(set(all_vocab)) + list(set(temp))
         all_vocab = list(set(all_vocab))
         chunk+=1
+        
 
-pickle.dump(all_vocab, open('../SeqModel/all_vocab.sav', 'wb'))
+print('vocab size: ', str(len(all_vocab)))
+pickle.dump(all_vocab, open('../SeqModel/all_vocab_1year.sav', 'wb'))

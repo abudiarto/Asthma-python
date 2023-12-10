@@ -1,3 +1,12 @@
+# Usage: to generate sequence of readcode per patient ordered by the event_date
+#     - extract readcodes from raw data
+#     - group them by event_date
+#     - group them by patid
+#     - join readcodes
+#     - NOTES: change the max_seq and date range based on the needs
+
+    
+
 import pandas as pd
 import cudf
 import pyreadr
@@ -11,7 +20,7 @@ from os.path import isfile, join
 #padding at the beginning of the list
 
 def make_uniform_data(x):
-    max_seq = 1500
+    max_seq = 194 #change this max_seq (max of sequence length) of date as needed
     if len(x) < max_seq:
         pads = ['PAD'] * (max_seq - len(x))
         return pads + x
@@ -23,7 +32,7 @@ def make_uniform_data(x):
     
 #padding at the end of the list
 def make_uniform_data_end(x):
-    max_seq = 1500
+    max_seq = 194 #change this max_seq (max of sequence length) of date as needed
     if len(x) < max_seq:
         pads = ['PAD'] * (max_seq - len(x))
         return x + pads
@@ -37,26 +46,27 @@ path = '../ServerData_13Oct2020/'
 clinical_files = [join(path, f) for f in listdir(path) if (isfile(join(path, f))) & ('f_clinical_part' in f)]
 therapy_files = [join(path, f) for f in listdir(path) if (isfile(join(path, f))) & ('f_therapy_part' in f)]
 
-chunk = 18
+chunk = 1
 files = zip(clinical_files[chunk-1:], therapy_files[chunk-1:])
 
 for clinical_file, therapy_file in files:
-    if chunk < 100:
+    if chunk < 25:
         print(clinical_file)
         clinical = pyreadr.read_r(clinical_file)
         clinical = clinical['f_clinical_part']
         therapy = pyreadr.read_r(therapy_file)
         therapy = therapy['f_therapy_part']
+
         
         #data selection 
         clinical = clinical.dropna(subset=['code_id'])
         clinical['event_date'] = pd.to_datetime(clinical['event_date'])
-        clinical = clinical.loc[(clinical['event_date'] >= '2008-01-01') & (clinical['event_date'] < '2018-01-01')]
+        clinical = clinical.loc[(clinical['event_date'] >= '2016-01-01') & (clinical['event_date'] < '2017-01-01')] #change this range of date as needed
         clinical = clinical[['patid', 'event_date', 'code_id']]
         
         therapy = therapy.dropna(subset=['code_id'])
         therapy['event_date'] = pd.to_datetime(therapy['event_date'])
-        therapy = therapy.loc[(therapy['event_date'] >= '2008-01-01') & (therapy['event_date'] < '2018-01-01')]
+        therapy = therapy.loc[(therapy['event_date'] >= '2016-01-01') & (therapy['event_date'] < '2017-01-01')]#change this range of date as needed
         therapy = therapy[['patid', 'event_date', 'code_id']]
 
         clinical['read_code_seq_perdate'] = clinical.sort_values(['event_date'], ascending=True).groupby(['patid', 'event_date'])['code_id'].transform(lambda x: ', '.join(x))

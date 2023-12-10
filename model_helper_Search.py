@@ -203,13 +203,14 @@ def earlyFussion(Xt_train, Xs_train, Xm_train, y_train, Xt_val, Xs_val, Xm_val, 
 
 def load_data(target_outcome):
     print('----------------- Load Data ------------------------------')
-    code2idx = pickle.load(open('../SeqModel/all_vocab.sav', 'rb'))
+    code2idx = pickle.load(open('../SeqModel/all_vocab_1year_clinical.sav', 'rb'))
     month2idx = pickle.load(open('../SeqModel/all_vocab_month.sav', 'rb'))
     # idx2month = pickle.load(open('../SeqModel/idx2month_all_big_08112023_75%.sav', 'rb'))
-    data = pickle.load(open('../SeqModel/all_raw_data_indexed.sav', 'rb'))
+    # data = pickle.load(open('../SeqModel/all_raw_data/_indexed.sav', 'rb'))
+    data = pd.read_feather('../SeqModel/all_data_1year_clinical.feather')
     print(data.shape)
     print('-----------------we passed the heaviest part------------------------------')
-    tabularData = pd.read_csv('../FinalData/cleaned_features_2vs1_15112023.csv')
+    tabularData = pd.read_csv('../FinalData/cleaned_features_01122023.csv')
     tabularData = tabularData.drop_duplicates(subset=['patid'])
 
     extractVars = ['patid', 'sex', 'BMI', 'imd_decile', 'smokingStatus', 'month_1', 'month_2', 'month_3',
@@ -217,8 +218,8 @@ def load_data(target_outcome):
      'month_10', 'month_11', 'month_12', ]
 
 
-    vocab_size = len(code2idx)
-    month_size = len(month2idx)    
+    vocab_size = len(code2idx)+1
+    month_size = len(month2idx)+1    
     print(month_size)
     print(data.shape)
     print(tabularData.shape)
@@ -229,12 +230,17 @@ def load_data(target_outcome):
     print(data.shape)
     
     print('########## Data split, train=England, eval=Scot+Wales ################')
-    trainingData = data[(data.Country == 'England') & (data.age >= 18)]
+    #change it based on the training set - swap between England vs Wales+Scotland
+    
+    trainingData = data[(data.Country == 'England') & ((data.age >= 8) & (data.age <= 80))]
+    testData = data[((data.Country == 'Wales') | (data.Country == 'Scotland')) & ((data.age >= 8) & (data.age <= 80))]
+    # trainingData = trainingData[trainingData.system_Vision == 1]
+    testDataWales = data[(data.Country == 'Wales') & ((data.age >= 8) & (data.age <= 80))]
+    testDataScotland = data[(data.Country == 'Scotland') & ((data.age >= 8) & (data.age <= 80))]
+    
+    #change it based on the training set
     trainingData, valData = train_test_split(trainingData, test_size=0.3, stratify=trainingData[target_outcome], shuffle=True, random_state=1234)
     trainingData, evalData = train_test_split(trainingData, test_size=0.2, stratify=trainingData[target_outcome], shuffle=True, random_state=1234)
-    testData = data[((data.Country == 'Wales') | (data.Country == 'Scotland')) & (data.age >= 18)]
-    testDataWales = data[(data.Country == 'Wales') & (data.age >= 18)]
-    testDataScotland = data[(data.Country == 'Scotland') & (data.age >= 18)]
     
 
     print('Train: ', trainingData.shape[0])
@@ -267,9 +273,9 @@ def generate_X_y(trainingData, valData, evalData, testData, testDataWales, testD
     print('############## Generate X (Xt: tabular | Xs: read code sequence | Xm: month visit sequence) and y ####################')
     tabularVars = ['age', 'sex', 'BMI', 'smokingStatus_Active Smoker', 
                    'smokingStatus_Former Smoker', 'smokingStatus_Non Smoker',
-                   'imd_decile_0', 'imd_decile_1', 'imd_decile_2', 'imd_decile_3',
-                   'imd_decile_4', 'imd_decile_5', 'imd_decile_6', 'imd_decile_7',
-                   'imd_decile_8', 'imd_decile_9', 'imd_decile_10', 
+                   'imd_decile_0.0', 'imd_decile_1.0', 'imd_decile_2.0', 'imd_decile_3.0',
+                   'imd_decile_4.0', 'imd_decile_5.0', 'imd_decile_6.0', 'imd_decile_7.0',
+                   'imd_decile_8.0', 'imd_decile_9.0', 'imd_decile_10.0', 
                    'system_EMIS', 'system_SystemOne', 'system_Vision',
                    # 'system_iSoft', 'system_Microtest', 'system_unknown',
                    # 'month_1', 'month_2', 'month_3','month_4', 'month_5', 
@@ -326,6 +332,168 @@ def generate_X_y(trainingData, valData, evalData, testData, testDataWales, testD
     Xt_testScotland = scaler.transform(Xt_testScotland)
     
     return Xt_train, Xt_val, Xt_eval, Xt_test, Xt_testWales, Xt_testScotland, Xs_train, Xs_val, Xs_eval, Xs_test, Xs_testWales, Xs_testScotland, Xm_train, Xm_val, Xm_eval, Xm_test, Xm_testWales, Xm_testScotland, y_train, y_val, y_eval, y_test, y_testWales, y_testScotland
+
+
+def load_data_split(target_outcome):
+    print('----------------- Load Data ------------------------------')
+    code2idx_clinical = pickle.load(open('../SeqModel/all_vocab_clinical.sav', 'rb'))
+    month2idx = pickle.load(open('../SeqModel/all_vocab_month.sav', 'rb'))
+    data_clinical = pd.read_feather('../SeqModel/all_data_clinical.feather')
+    code2idx_therapy = pickle.load(open('../SeqModel/all_vocab_therapy.sav', 'rb'))
+    data_therapy = pd.read_feather('../SeqModel/all_data_therapy.feather')
+    data = data_clinical.merge(data_therapy[['patid', 'read_code_seq_padded_idx', 'read_code_seq_padded_end_idx',
+       'month_padded_idx', 'month_padded_idx_end']], on='patid', suffixes=['_clin', '_ther'], how='inner')
+    print(data.shape)
+    print('-----------------we passed the heaviest part------------------------------')
+    tabularData = pd.read_csv('../FinalData/cleaned_features_01122023.csv')
+    tabularData = tabularData.drop_duplicates(subset=['patid'])
+
+    extractVars = ['patid', 'sex', 'BMI', 'imd_decile', 'smokingStatus', 'month_1', 'month_2', 'month_3',
+     'month_4', 'month_5', 'month_6', 'month_7', 'month_8', 'month_9',
+     'month_10', 'month_11', 'month_12', ]
+
+
+    vocab_size_clinical = len(code2idx_clinical)+1
+    vocab_size_therapy = len(code2idx_therapy)+1
+    month_size = len(month2idx)+1    
+    print(month_size)
+    print(data.shape)
+    print(tabularData.shape)
+
+    data = data.merge(tabularData[extractVars], how = 'left', on='patid')
+    data = pd.get_dummies(data, columns=['imd_decile', 'smokingStatus', 'system']) #one hot encoding
+    tabularData = []
+    print(data.shape)
+    
+    print('########## Data split, train=England, eval=Scot+Wales ################')
+    #change it based on the training set - swap between England vs Wales+Scotland
+    
+    trainingData = data[(data.Country == 'England') & ((data.age >= 8) & (data.age <= 80))]
+    testData = data[((data.Country == 'Wales') | (data.Country == 'Scotland')) & ((data.age >= 8) & (data.age <= 80))]
+    # trainingData = trainingData[trainingData.system_Vision == 1]
+    testDataWales = data[(data.Country == 'Wales') & ((data.age >= 8) & (data.age <= 80))]
+    testDataScotland = data[(data.Country == 'Scotland') & ((data.age >= 8) & (data.age <= 80))]
+    
+    #change it based on the training set
+    trainingData, valData = train_test_split(trainingData, test_size=0.3, stratify=trainingData[target_outcome], shuffle=True, random_state=1234)
+    trainingData, evalData = train_test_split(trainingData, test_size=0.2, stratify=trainingData[target_outcome], shuffle=True, random_state=1234)
+    
+
+    print('Train: ', trainingData.shape[0])
+    print('Val: ', valData.shape[0])
+    print('Eval (internal validation): ', evalData.shape[0])
+    print('Test: ', testData.shape[0])
+    print('Test - Wales: ', testDataWales.shape[0])
+    print('Test - Scotland: ', testDataScotland.shape[0])
+
+    print('############# make sure no data leak between sets #######################')
+    print(list(set(trainingData.patid.values).intersection(set(valData.patid.values))))
+    print(list(set(trainingData.patid.values).intersection(set(evalData.patid.values))))
+    print(list(set(valData.patid.values).intersection(set(evalData.patid.values))))
+    print(list(set(valData.patid.values).intersection(set(testData.patid.values))))
+    print(list(set(trainingData.patid.values).intersection(set(testData.patid.values))))
+    print(len(list(set(testData.patid.values).intersection(set(testDataScotland.patid.values))))) # here data leak is expected)
+
+    print('############# Positive and negative groups ratio #######################')
+    print(trainingData[target_outcome].value_counts(normalize=True))
+    print(valData[target_outcome].value_counts(normalize=True))
+    print(evalData[target_outcome].value_counts(normalize=True))
+    print(testData[target_outcome].value_counts(normalize=True))
+    print(testDataWales[target_outcome].value_counts(normalize=True))
+    print(testDataScotland[target_outcome].value_counts(normalize=True))
+    
+    return trainingData, valData, evalData, testData, testDataWales, testDataScotland, vocab_size_clinical, vocab_size_therapy, month_size
+
+def generate_X_y_split(trainingData, valData, evalData, testData, testDataWales, testDataScotland, target_outcome):
+
+    print('############## Generate X (Xt: tabular | Xs: read code sequence | Xm: month visit sequence) and y ####################')
+    tabularVars = ['age', 'sex', 'BMI', 'smokingStatus_Active Smoker', 
+                   'smokingStatus_Former Smoker', 'smokingStatus_Non Smoker',
+                   'imd_decile_0', 'imd_decile_1', 'imd_decile_2', 'imd_decile_3',
+                   'imd_decile_4', 'imd_decile_5', 'imd_decile_6', 'imd_decile_7',
+                   'imd_decile_8', 'imd_decile_9', 'imd_decile_10', 
+                   'system_EMIS', 'system_SystemOne', 'system_Vision',
+                   # 'system_iSoft', 'system_Microtest', 'system_unknown',
+                   # 'month_1', 'month_2', 'month_3','month_4', 'month_5', 
+                   # 'month_6', 'month_7', 'month_8', 'month_9', 'month_10', 
+                   # 'month_11', 'month_12',
+                  ]
+    Xt_train = np.array(trainingData[tabularVars].values)
+    Xt_val = np.array(valData[tabularVars].values)
+    Xt_eval = np.array(evalData[tabularVars].values)
+    Xt_test = np.array(testData[tabularVars].values)
+    Xt_testWales = np.array(testDataWales[tabularVars].values)
+    Xt_testScotland= np.array(testDataScotland[tabularVars].values)
+
+    Xs_clin_train = np.array(trainingData.read_code_seq_padded_end_idx_clin.values)
+    Xs_clin_train = np.array([x for x in Xs_clin_train])
+    Xs_clin_val = np.array(valData.read_code_seq_padded_end_idx_clin.values)
+    Xs_clin_val = np.array([x for x in Xs_clin_val])
+    Xs_clin_eval = np.array(evalData.read_code_seq_padded_end_idx_clin.values)
+    Xs_clin_eval = np.array([x for x in Xs_clin_eval])
+    Xs_clin_test = np.array(testData.read_code_seq_padded_end_idx_clin.values)
+    Xs_clin_test = np.array([x for x in Xs_clin_test])
+    Xs_clin_testWales = np.array(testDataWales.read_code_seq_padded_end_idx_clin.values)
+    Xs_clin_testWales = np.array([x for x in Xs_clin_testWales])
+    Xs_clin_testScotland = np.array(testDataScotland.read_code_seq_padded_end_idx_clin.values)
+    Xs_clin_testScotland = np.array([x for x in Xs_clin_testScotland])
+    
+    Xs_ther_train = np.array(trainingData.read_code_seq_padded_end_idx_ther.values)
+    Xs_ther_train = np.array([x for x in Xs_ther_train])
+    Xs_ther_val = np.array(valData.read_code_seq_padded_end_idx_ther.values)
+    Xs_ther_val = np.array([x for x in Xs_ther_val])
+    Xs_ther_eval = np.array(evalData.read_code_seq_padded_end_idx_ther.values)
+    Xs_ther_eval = np.array([x for x in Xs_ther_eval])
+    Xs_ther_test = np.array(testData.read_code_seq_padded_end_idx_ther.values)
+    Xs_ther_test = np.array([x for x in Xs_ther_test])
+    Xs_ther_testWales = np.array(testDataWales.read_code_seq_padded_end_idx_ther.values)
+    Xs_ther_testWales = np.array([x for x in Xs_ther_testWales])
+    Xs_ther_testScotland = np.array(testDataScotland.read_code_seq_padded_end_idx_ther.values)
+    Xs_ther_testScotland = np.array([x for x in Xs_ther_testScotland])
+
+    Xm_clin_train = np.array(trainingData.read_code_seq_padded_end_idx_clin.values)
+    Xm_clin_train = np.array([x for x in Xm_clin_train])
+    Xm_clin_val = np.array(valData.read_code_seq_padded_end_idx_clin.values)
+    Xm_clin_val = np.array([x for x in Xm_clin_val])
+    Xm_clin_eval = np.array(evalData.read_code_seq_padded_end_idx_clin.values)
+    Xm_clin_eval = np.array([x for x in Xm_clin_eval])
+    Xm_clin_test = np.array(testData.read_code_seq_padded_end_idx_clin.values)
+    Xm_clin_test = np.array([x for x in Xm_clin_test])
+    Xm_clin_testWales = np.array(testDataWales.read_code_seq_padded_end_idx_clin.values)
+    Xm_clin_testWales = np.array([x for x in Xm_clin_testWales])
+    Xm_clin_testScotland = np.array(testDataScotland.read_code_seq_padded_end_idx_clin.values)
+    Xm_clin_testScotland = np.array([x for x in Xm_clin_testScotland])
+    
+    Xm_ther_train = np.array(trainingData.read_code_seq_padded_end_idx_ther.values)
+    Xm_ther_train = np.array([x for x in Xm_ther_train])
+    Xm_ther_val = np.array(valData.read_code_seq_padded_end_idx_ther.values)
+    Xm_ther_val = np.array([x for x in Xm_ther_val])
+    Xm_ther_eval = np.array(evalData.read_code_seq_padded_end_idx_ther.values)
+    Xm_ther_eval = np.array([x for x in Xm_ther_eval])
+    Xm_ther_test = np.array(testData.read_code_seq_padded_end_idx_ther.values)
+    Xm_ther_test = np.array([x for x in Xm_ther_test])
+    Xm_ther_testWales = np.array(testDataWales.read_code_seq_padded_end_idx_ther.values)
+    Xm_ther_testWales = np.array([x for x in Xm_ther_testWales])
+    Xm_ther_testScotland = np.array(testDataScotland.read_code_seq_padded_end_idx_ther.values)
+    Xm_ther_testScotland = np.array([x for x in Xm_ther_testScotland])
+
+    y_train = trainingData[target_outcome].values
+    y_val = valData[target_outcome].values
+    y_eval = evalData[target_outcome].values
+    y_test = testData[target_outcome].values
+    y_testWales = testDataWales[target_outcome].values
+    y_testScotland = testDataScotland[target_outcome].values
+
+    #scalling tabular data
+    scaler = StandardScaler().fit(Xt_train)
+    Xt_train = scaler.transform(Xt_train)
+    Xt_val = scaler.transform(Xt_val)
+    Xt_eval = scaler.transform(Xt_eval)
+    Xt_test = scaler.transform(Xt_test)
+    Xt_testWales = scaler.transform(Xt_testWales)
+    Xt_testScotland = scaler.transform(Xt_testScotland)
+    
+    return Xt_train, Xt_val, Xt_eval, Xt_test, Xt_testWales, Xt_testScotland, Xs_clin_train, Xs_clin_val, Xs_clin_eval, Xs_clin_test, Xs_clin_testWales, Xs_clin_testScotland, Xs_ther_train, Xs_ther_val, Xs_ther_eval, Xs_ther_test, Xs_ther_testWales, Xs_ther_testScotland, Xm_clin_train, Xm_clin_val, Xm_clin_eval, Xm_clin_test, Xm_clin_testWales, Xm_clin_testScotland, Xm_ther_train, Xm_ther_val, Xm_ther_eval, Xm_ther_test, Xm_ther_testWales, Xm_ther_testScotland, y_train, y_val, y_eval, y_test, y_testWales, y_testScotland
 
 
 def set_parameters(trainingData, target_outcome):

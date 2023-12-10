@@ -11,7 +11,7 @@ import time
 
 
 #vocab and code2idx generation
-vocab_all = pickle.load(open('../SeqModel/all_vocab_1year.sav', 'rb'))
+vocab_all = pickle.load(open('../SeqModel/all_vocab_therapy.sav', 'rb'))
 idx_all = range(1, len(vocab_all)+1)
 
 code2idx_all = dict(zip(vocab_all, idx_all))
@@ -68,11 +68,11 @@ practice = practice['d_practice']
 practice['system'] = practice.apply(lambda x: fix_system(x.system), axis=1)
 
 #Age in 2008-01-01
-patient['age'] = patient.year_of_birth.apply(lambda x: 2016-x) #change the year based on the baseline year
+patient['age'] = patient.year_of_birth.apply(lambda x: 2016-x)
 patient = patient[['patid', 'practice_id', 'age']].merge(practice[['practice_id', 'Country', 'system']], how='left', on='practice_id')
 
 # Outcomes data
-outcomes = pd.read_csv("../FinalData/cleaned_outcomes_01122023.csv")
+outcomes = pd.read_csv("../FinalData/cleaned_outcomes_2vs1_15112023.csv")
 outcomes['3months'] = outcomes.apply(lambda x: x.outcome_3months, axis=1)
 outcomes['6months'] = outcomes.apply(lambda x: (x.outcome_3months)|(x.outcome_6months), axis=1)
 outcomes['9months'] = outcomes.apply(lambda x: (x.outcome_3months)|(x.outcome_6months)|(x.outcome_9months), axis=1)
@@ -80,7 +80,7 @@ outcomes['12months'] = outcomes.apply(lambda x: (x.outcome_3months)|(x.outcome_6
 
 
 ###pocess each chunk
-path = '../SeqModel/SeqChunks/'
+path = '../SeqModel/SeqChunks_therapy/'
 files = [join(path, f) for f in listdir(path) if (isfile(join(path, f))) & ('seq_data' in f)]
 
 chunk = 1
@@ -103,7 +103,7 @@ for file in files:
     all_raw_data = all_raw_data.merge(outcomes[['patid', '3months', '6months', 
                                        '9months', '12months',]], how='inner', on='patid')
 
-    pickle.dump(all_raw_data, open('../SeqModel/SeqChunks/all_raw_data_indexed_' + str(chunk) +'.sav', 'wb'))
+    pickle.dump(all_raw_data, open('../SeqModel/SeqChunks_therapy/all_raw_data_indexed_' + str(chunk) +'.sav', 'wb'))
     chunk+=1
     # pickle.dump(vocab_all, open('../SeqModel/all_vocab.sav', 'wb'))
     # pickle.dump(month_vocab, open('../SeqModel/all_vocab_month.sav', 'wb'))
