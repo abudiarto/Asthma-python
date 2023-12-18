@@ -20,7 +20,7 @@ from os.path import isfile, join
 #padding at the beginning of the list
 
 def make_uniform_data(x):
-    max_seq = 62
+    max_seq = 150
     if len(x) < max_seq:
         pads = ['PAD'] * (max_seq - len(x))
         return pads + x
@@ -32,7 +32,7 @@ def make_uniform_data(x):
     
 #padding at the end of the list
 def make_uniform_data_end(x):
-    max_seq = 62
+    max_seq = 150
     if len(x) < max_seq:
         pads = ['PAD'] * (max_seq - len(x))
         return x + pads
@@ -46,18 +46,19 @@ path = '../ServerData_13Oct2020/'
 clinical_files = [join(path, f) for f in listdir(path) if (isfile(join(path, f))) & ('f_clinical_part' in f)]
 
 chunk = 1
+# target_readcode = pd.read_csv('../FinalData/UniqueReadCodes.csv') #asthma related readcodes
 
 for clinical_file in clinical_files:
-    if chunk < 30:
+    if chunk < 100:
         print(clinical_file)
         clinical = pyreadr.read_r(clinical_file)
         clinical = clinical['f_clinical_part']
-
+        # clinical = clinical[clinical.code_id.isin(target_readcode.readcodes.values)] #comment it no need to be more specific on the readcode
         
         #data selection 
         clinical = clinical.dropna(subset=['code_id'])
         clinical['event_date'] = pd.to_datetime(clinical['event_date'])
-        clinical = clinical.loc[(clinical['event_date'] >= '2016-01-01') & (clinical['event_date'] < '2017-01-01')]
+        clinical = clinical.loc[(clinical['event_date'] >= '2016-01-01') & (clinical['event_date'] < '2018-01-01')]
         clinical = clinical[['patid', 'event_date', 'code_id']]
         
 

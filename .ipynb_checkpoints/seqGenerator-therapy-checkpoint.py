@@ -20,7 +20,7 @@ from os.path import isfile, join
 #padding at the beginning of the list
 
 def make_uniform_data(x):
-    max_seq = 129 #change this max_seq (max of sequence length) of date as needed
+    max_seq = 150 #change this max_seq (max of sequence length) of date as needed
     if len(x) < max_seq:
         pads = ['PAD'] * (max_seq - len(x))
         return pads + x
@@ -32,7 +32,7 @@ def make_uniform_data(x):
     
 #padding at the end of the list
 def make_uniform_data_end(x):
-    max_seq = 129 #change this max_seq (max of sequence length) of date as needed
+    max_seq = 150 #change this max_seq (max of sequence length) of date as needed
     if len(x) < max_seq: 
         pads = ['PAD'] * (max_seq - len(x))
         return x + pads
@@ -46,17 +46,19 @@ path = '../ServerData_13Oct2020/'
 therapy_files = [join(path, f) for f in listdir(path) if (isfile(join(path, f))) & ('f_therapy_part' in f)]
 
 chunk = 1
+# target_readcode = pd.read_csv('../FinalData/UniqueReadCodes.csv') #asthma related readcodes
 
 for therapy_file in therapy_files:
-    if (chunk >=25) & (chunk < 30):
+    if chunk < 100:
         print(therapy_file)
         therapy = pyreadr.read_r(therapy_file)
         therapy = therapy['f_therapy_part']
+        # therapy = therapy[therapy.code_id.isin(target_readcode.readcodes.values)] #comment it no need to be more specific on the readcode
         
         #data selection 
         therapy = therapy.dropna(subset=['code_id'])
         therapy['event_date'] = pd.to_datetime(therapy['event_date'])
-        therapy = therapy.loc[(therapy['event_date'] >= '2016-01-01') & (therapy['event_date'] < '2017-01-01')] #change this range of date as needed
+        therapy = therapy.loc[(therapy['event_date'] >= '2016-01-01') & (therapy['event_date'] < '2018-01-01')] #change this range of date as needed
         therapy = therapy[['patid', 'event_date', 'code_id']]
 
         therapy['read_code_seq_perdate'] = therapy.sort_values(['event_date'], ascending=True).groupby(['patid', 'event_date'])['code_id'].transform(lambda x: ', '.join(x))

@@ -12,7 +12,7 @@ path = '../SeqModel/SeqChunks_therapy/'
 chunk_files = [join(path, f) for f in listdir(path) if (isfile(join(path, f))) & ('all_raw_data_indexed_' in f)]
 chunk = 1
 kept_columns = ['patid', 'read_code_seq_padded_idx', 'read_code_seq_padded_end_idx',
-       'month_padded_idx', 'month_padded_idx_end', 'Country', 'age', 'system',
+       'month_padded_idx', 'month_padded_idx_end', 'Country', 'age',
        '3months', '6months', '9months', '12months']
 all_data = pickle.load(open('../SeqModel/SeqChunks_therapy/all_raw_data_indexed_1.sav', 'rb'))[kept_columns]
 
@@ -20,7 +20,7 @@ all_data = pickle.load(open('../SeqModel/SeqChunks_therapy/all_raw_data_indexed_
 for file in chunk_files:
     print(file)
     print(chunk)
-    if (file != '../SeqModel/SeqChunks_therapy/all_raw_data_indexed_1.sav') & (chunk < 30):
+    if (file != '../SeqModel/SeqChunks_therapy/all_raw_data_indexed_1.sav') & (chunk < 100):
         temp = pickle.load(open(file, 'rb'))[kept_columns]
         all_data = pd.concat([all_data, temp])
         all_data.reset_index(drop=True, inplace=True)

@@ -47,32 +47,35 @@ idx2month_all[0] = 'PAD'
 print('month2idx Size: {}'.format(len(month2idx_all)))
 # print('idx2code Size: {}'.format(len(idx2code_all)))
 
-def fix_system(x):
-    if ('SystmOne' in x):
-        return 'SystemOne'
-    elif ('emis' in x) | ('Emis' in x) | ('EMIS' in x):
-        return 'EMIS'
-    elif ('Vision' in x):
-        return 'Vision'
-    elif ('iSoft' in x):
-        return 'iSoft'
-    elif ('Microtest' in x):
-        return 'Microtest'
-    else:
-        return 'unknown'
+# def fix_system(x):
+#     if ('SystmOne' in x):
+#         return 'SystemOne'
+#     elif ('emis' in x) | ('Emis' in x) | ('EMIS' in x):
+#         return 'EMIS'
+#     elif ('Vision' in x):
+#         return 'Vision'
+#     elif ('iSoft' in x):
+#         return 'iSoft'
+#     elif ('Microtest' in x):
+#         return 'Microtest'
+#     else:
+#         return 'unknown'
+
+
 patient = pyreadr.read_r('../ServerData_13Oct2020/d_patient_overall.Rdata')
-practice = pyreadr.read_r('../ServerData_13Oct2020/d_practice.Rdata')
 patient = patient['d_patient_overall']
+practice = pyreadr.read_r('../ServerData_13Oct2020/d_practice.Rdata')
 practice = practice['d_practice']
 
-practice['system'] = practice.apply(lambda x: fix_system(x.system), axis=1)
+# practice['system'] = practice.apply(lambda x: fix_system(x.system), axis=1)
 
 #Age in 2008-01-01
+
 patient['age'] = patient.year_of_birth.apply(lambda x: 2016-x)
-patient = patient[['patid', 'practice_id', 'age']].merge(practice[['practice_id', 'Country', 'system']], how='left', on='practice_id')
+patient = patient[['patid', 'practice_id', 'age']].merge(practice[['practice_id', 'Country']], how='left', on='practice_id')
 
 # Outcomes data
-outcomes = pd.read_csv("../FinalData/cleaned_outcomes_2vs1_15112023.csv")
+outcomes = pd.read_csv("../FinalData/cleaned_outcomes_2vs1_09122023.csv")
 outcomes['3months'] = outcomes.apply(lambda x: x.outcome_3months, axis=1)
 outcomes['6months'] = outcomes.apply(lambda x: (x.outcome_3months)|(x.outcome_6months), axis=1)
 outcomes['9months'] = outcomes.apply(lambda x: (x.outcome_3months)|(x.outcome_6months)|(x.outcome_9months), axis=1)
@@ -97,7 +100,7 @@ for file in files:
     all_raw_data['month_padded_idx'] = all_raw_data['month_padded'].apply(lambda x: [month2idx_all.get(key) for key in x])
     all_raw_data['month_padded_idx_end'] = all_raw_data['month_padded_end'].apply(lambda x: [month2idx_all.get(key) for key in x])
 
-    all_raw_data = all_raw_data.merge(patient[['patid', 'Country', 'age', 'system']], how='left', on='patid')
+    all_raw_data = all_raw_data.merge(patient[['patid', 'Country', 'age']], how='left', on='patid')
     all_raw_data = all_raw_data.drop_duplicates(subset=['patid']).reset_index(drop=True)  
 
     all_raw_data = all_raw_data.merge(outcomes[['patid', '3months', '6months', 

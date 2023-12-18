@@ -16,7 +16,7 @@ all_vocab = pickle.load(open('../SeqModel/SeqChunks_clinical/vocab_1.sav', 'rb')
 for file in chunk_files:
     print(file)
     print(chunk)
-    if (file != '../SeqModel/SeqChunks_clinical/vocab_1.sav') & (chunk < 30):
+    if (file != '../SeqModel/SeqChunks_clinical/vocab_1.sav') & (chunk < 100):
         temp = pickle.load(open(file, 'rb'))
         all_vocab = list(set(all_vocab)) + list(set(temp))
         all_vocab = list(set(all_vocab))

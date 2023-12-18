@@ -25,6 +25,8 @@ import pickle
 import time
 # fix random seed for reproducibility
 tf.random.set_seed(1234)
+cfg = tf.ConfigProto() 
+cfg.gpu_options.allow_growth = True
 
 # Data loader
 trainingData, validationData, internalEvaluationData, evaluationData, evaluationDataWales, evaluationDataScotland = pickle.load(open('../data/dataset_scaled_2vs1_09122023.sav', 'rb'))
