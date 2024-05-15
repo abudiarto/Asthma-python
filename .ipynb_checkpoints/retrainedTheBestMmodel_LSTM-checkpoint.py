@@ -162,13 +162,8 @@ print(Xt_eval.shape)
 print(Xt_eval_Wales.shape)
 print(Xt_eval_Scotland.shape)
 
-# target_outcomes = ['3months', '6months', '12months', '24months'] 
-target_outcome = '12months'
-max_codes_clin = Xclin_train.shape[1]
-max_codes_ther = Xther_train.shape[1]
-max_codes = 100
-tab_feature_size = Xt_train.shape[1]
 
+target_outcome = '12months'
 y_train = trainingData[target_outcome].values
 y_val = validationData[target_outcome].values
 y_internaleval = internalEvaluationData[target_outcome].values
@@ -176,12 +171,17 @@ y_eval = evaluationData[target_outcome].values
 y_eval_Wales = evaluationDataWales[target_outcome].values
 y_eval_Scotland = evaluationDataScotland[target_outcome].values
 
-pos_weight = sum(x == 0 for x in y_train)/sum(x == 1 for x in y_train)
-class_weight = {0:1, 1:pos_weight}
-print(class_weight)
+
+max_codes_clin = Xclin_train.shape[1]
+max_codes_ther = Xther_train.shape[1]
+max_codes = 100
+tab_feature_size = Xt_train.shape[1]
+top_vocabs_portion = .1
+
+print(max_codes_clin)
+print(max_codes_ther)
 
 hp = keras_tuner.HyperParameters()
-
 class MyHyperModel_allParams(keras_tuner.HyperModel):
     def build(self, hp):
         #tabular dara - demography   
@@ -204,44 +204,26 @@ class MyHyperModel_allParams(keras_tuner.HyperModel):
         nn = BatchNormalization()(nn)
         nn = Activation(hp.Choice("activation0", ["relu", "elu", "gelu", "silu", "selu"]))(nn)
         nn = Dropout(rate=hp.Float("rate0", min_value=0.1, max_value=0.5, step=0.1))(nn)
-        
-        # for i in range(2):
-        #     nn = Dense(units=neurons_layer1, 
-        #                 kernel_initializer=hp.Choice("kernel_initializer_layer1", ["glorot_uniform", "glorot_normal", "lecun_uniform", "lecun_normal"]), 
-        #                 kernel_regularizer=L1L2(l1=hp.Float("kernel_l1_dense1", min_value=0.0, max_value=.1, step=0.02), 
-        #                                         l2=hp.Float("kernel_l2_dense1", min_value=0.0, max_value=.1, step=0.02)
-        #                                        ),
-        #                 bias_regularizer=L1L2(l1=hp.Float("bias_l1_dense1", min_value=0.0, max_value=.1, step=0.02), 
-        #                                         l2=hp.Float("bias_l2_dense1", min_value=0.0, max_value=.1, step=0.02)
-        #                                        ),
-        #                 activity_regularizer=L1L2(l1=hp.Float("act_l1_dense1", min_value=0.0, max_value=.1, step=0.02), 
-        #                                         l2=hp.Float("act_l2_dense1", min_value=0.0, max_value=.1, step=0.02)
-        #                                        ),
-        #                 input_shape = (tab_feature_size,)
-        #                )(nn)
-        #     nn = BatchNormalization()(nn)
-        #     nn = Activation(hp.Choice("activation1", ["relu", "elu", "gelu", "silu", "selu"]))(nn)
-        #     nn = Dropout(rate=hp.Float("rate1", min_value=0.1, max_value=0.5, step=0.1))(nn)
 
         
         #==================================================================================================================================================#
 
         #clinical embedding for lstm
-        inputs2 = Input(shape=max_codes_clin)
+        inputs2 = Input(shape=max_codes)
         embedding_size = hp.Int("embedding_size", min_value=int(np.cbrt(vocab_size_clinical)), max_value=int(np.sqrt(vocab_size_therapy)))
-        embedding_clin = Embedding(vocab_size_clinical, 
+        embedding_clin = Embedding(int(top_vocabs_portion*vocab_size_clinical), 
                                    output_dim = embedding_size, 
-                                   input_length=max_codes_clin,
+                                   input_length=max_codes,
                                    mask_zero=True,
                                   )(inputs2)
         
 
 
         #therapy embedding for lstm
-        inputs3 = Input(shape=max_codes_clin)
-        embedding_ther = Embedding(vocab_size_therapy, 
+        inputs3 = Input(shape=max_codes)
+        embedding_ther = Embedding(int(top_vocabs_portion*vocab_size_therapy), 
                                    output_dim = embedding_size, 
-                                   input_length=max_codes_clin,
+                                   input_length=max_codes,
                                    mask_zero=True,
                              )(inputs3)
         
@@ -253,24 +235,25 @@ class MyHyperModel_allParams(keras_tuner.HyperModel):
 
         ###layer 2 - LSTM to the final product
         neuron_lstm_units = hp.Int('neuron_lstm_units', min_value=32, max_value=128, step=32)
-    
-        lstm = Bidirectional(LSTM(units=neuron_lstm_units, 
-                            return_sequences=True, 
-                            kernel_regularizer=L1L2(l1=hp.Float("kernel_l1_lstm1", min_value=0.0, max_value=0.1), 
-                                           l2=hp.Float("kernel_l2_lstmTherapy", min_value=0.0, max_value=0.1)
-                                          ),
-                            bias_regularizer=L1L2(l1=hp.Float("bias_l1_lstm1", min_value=0.0, max_value=0.1), 
-                                           l2=hp.Float("bias_l2_lstmTherapy", min_value=0.0, max_value=0.1)
-                                          ),
-                            activity_regularizer=L1L2(l1=hp.Float("act_l1_lstm1", min_value=0.0, max_value=0.1), 
-                                           l2=hp.Float("act_l2_lstmTherapy", min_value=0.0, max_value=0.1)
-                                          ),
-                            recurrent_regularizer=L1L2(l1=hp.Float("rec_l1_lstm1", min_value=0.0, max_value=0.1), 
-                                           l2=hp.Float("rec_l2_lstmTherapy", min_value=0.0, max_value=0.1)
-                                          ),
-                                 )
-                            )(allEmbedding)
-        lstm = Dropout(rate=hp.Float("rate_lstm1", min_value=0.1, max_value=0.5))(lstm)
+        
+        for i in range (2):
+            lstm = Bidirectional(LSTM(units=neuron_lstm_units, 
+                                return_sequences=True, 
+                                kernel_regularizer=L1L2(l1=hp.Float("kernel_l1_lstm1", min_value=0.0, max_value=0.1), 
+                                               l2=hp.Float("kernel_l2_lstmTherapy", min_value=0.0, max_value=0.1)
+                                              ),
+                                bias_regularizer=L1L2(l1=hp.Float("bias_l1_lstm1", min_value=0.0, max_value=0.1), 
+                                               l2=hp.Float("bias_l2_lstmTherapy", min_value=0.0, max_value=0.1)
+                                              ),
+                                activity_regularizer=L1L2(l1=hp.Float("act_l1_lstm1", min_value=0.0, max_value=0.1), 
+                                               l2=hp.Float("act_l2_lstmTherapy", min_value=0.0, max_value=0.1)
+                                              ),
+                                recurrent_regularizer=L1L2(l1=hp.Float("rec_l1_lstm1", min_value=0.0, max_value=0.1), 
+                                               l2=hp.Float("rec_l2_lstmTherapy", min_value=0.0, max_value=0.1)
+                                              ),
+                                     )
+                                )(allEmbedding)
+            lstm = Dropout(rate=hp.Float("rate_lstm1", min_value=0.1, max_value=0.5))(lstm)
         
             
         lstm = Bidirectional(LSTM(units=int(neurons_layer1/2), 
@@ -295,7 +278,7 @@ class MyHyperModel_allParams(keras_tuner.HyperModel):
 ###################################################################################################################################################        
 
         #merge tabular and sequence layers
-        # nn = Reshape((1, neuron_units))(nn)
+        # nn = Reshape((1, neurons_layer1))(nn)
         add = concatenate([nn, lstm], axis=1)
 
         ##layer 4 - FCN before classification layer
@@ -358,41 +341,38 @@ class MyHyperModel_allParams(keras_tuner.HyperModel):
             *args,
             **kwargs,
         )
+    
+start_time = time.time()
 
-#LOAD TUNER
-model = MyHyperModel_allParams()
-tuner = keras_tuner.BayesianOptimization(
-    hypermodel= model,
-    objective=keras_tuner.Objective("val_auc", direction="max"),
-    max_trials=20,
-    overwrite=False,
-    seed = 1234,
-    directory='../SeqModel/tuner/',
-    project_name="lstmv2.0AllParams1-bayesian-deeper-specific",
-)
+#run tuner
+earlyStopping = EarlyStopping(monitor='val_auc', patience=5, verbose=0, mode='max', restore_best_weights=True)
+pos_weight = trainingData[target_outcome].value_counts()[0]/trainingData[target_outcome].value_counts()[1]
+class_weight = {0:1, 1:pos_weight}
+
+#free up memory
+sequence_data = []
+
+with tf.device('/GPU:0'):
+    model = MyHyperModel_allParams()
+    tuner = keras_tuner.BayesianOptimization(
+        hypermodel= model,
+        objective=keras_tuner.Objective("val_auc", direction="max"),
+        max_trials=15,
+        overwrite=False,
+        seed=1234,
+        directory='../SeqModel/tuner/',
+        project_name="lstmv2.0AllParams1-bayesian-deeper",
+    )
+    
 best_models = tuner.get_best_models(num_models=1)[0]
-
-# lr= 1e-4
-# clipvalue= 0.5
-# beta_1= 0.9
-# beta_2= 0.9
-# epsilon= 1e-06
-# weight_decay= 0.06
-# # opt = Adamax(learning_rate=lr, clipvalue=clipvalue, beta_1=beta_1, beta_2=beta_2, epsilon=epsilon, weight_decay=weight_decay)
-# opt = Adadelta(learning_rate=lr, clipvalue=clipvalue, epsilon=epsilon, weight_decay=weight_decay)
-# metrics = [
-#     AUC(num_thresholds=1000, name='auc'),
-#     AUC(num_thresholds=1000, name='auprc', curve='PR'),
-# ]
-# best_models.compile(loss='binary_crossentropy', optimizer=opt, metrics=metrics )
 print(best_models.summary())
 earlyStopping = EarlyStopping(monitor='val_auc', patience=20, verbose=0, mode='max', restore_best_weights=True)
 mcp_save = ModelCheckpoint('../SeqModel/lstmv2.0AllParams1-bayesian-deeper-specific.weights.hdf5', save_best_only=True, monitor='val_auc', mode='max')
-history = best_models.fit([Xt_train, Xclin_train, Xther_train[:,:max_codes_clin]], y_train, 
-                 validation_data=([Xt_val, Xclin_val, Xther_val[:,:max_codes_clin]], y_val),
-                          epochs=200, batch_size=64, class_weight=class_weight, callbacks = [earlyStopping])
+history = best_models.fit([Xt_train, Xclin_train[:,:max_codes], Xther_train[:,:max_codes]], y_train, 
+                 validation_data=([Xt_val, Xclin_val[:,:max_codes], Xther_val[:,:max_codes]], y_val),
+                          epochs=200, batch_size=128, class_weight=class_weight, callbacks = [earlyStopping])
 
-pickle.dump(history, open('../SeqModel/history_lstmv2.0AllParams1-bayesian-deeper-specific.sav', 'wb'))
+pickle.dump(history, open('../SeqModel/history_lstmv2.0AllParams1-bayesian-deeper.sav', 'wb'))
 # list all data in history
 print(history.history.keys())
 # summarize history for accuracy
@@ -403,7 +383,7 @@ plt.ylabel('AUC')
 plt.xlabel('epoch')
 plt.legend(['train', 'test'], loc='upper left')
 # plt.show()
-plt.savefig('../SeqModel/val_auc_LSTM.png')
+plt.savefig('../SeqModel/val_auc_LSTM_bayesian-deeper.png')
 
 # summarize history for loss
 plt.plot(history.history['loss'])
@@ -414,7 +394,7 @@ plt.ylabel('loss')
 plt.xlabel('epoch')
 plt.legend(['train', 'val'], loc='upper left')
 # plt.show()
-plt.savefig('../SeqModel/val_loss_LSTM.png')
+plt.savefig('../SeqModel/val_loss_LSTM_bayesian-deeper.png')
 
 plt.plot(history.history['auprc'])
 plt.plot(history.history['val_auprc'])
@@ -424,10 +404,10 @@ plt.ylabel('auprc')
 plt.xlabel('epoch')
 plt.legend(['train', 'val'], loc='upper left')
 # plt.show()
-plt.savefig('../SeqModel/val_auprc_LSTM.png')
+plt.savefig('../SeqModel/val_auprc_LSTM_bayesian-deeper.png')
 
 with tf.device('/GPU:0'):
-    print(best_models.evaluate([Xt_internaleval, Xclin_internaleval, Xther_internaleval[:,:max_codes_clin]], y_internaleval))
-    print(best_models.evaluate([Xt_eval, Xclin_eval, Xther_eval[:,:max_codes_clin]], y_eval))
-    print(best_models.evaluate([Xt_eval_Wales, Xclin_eval_Wales, Xther_eval_Wales[:,:max_codes_clin]], y_eval_Wales))
-    print(best_models.evaluate([Xt_eval_Scotland, Xclin_eval_Scotland, Xther_eval_Scotland[:,:max_codes_clin]], y_eval_Scotland))
+    print(best_models.evaluate([Xt_internaleval, Xclin_internaleval[:,:max_codes], Xther_internaleval[:,:max_codes]], y_internaleval))
+    print(best_models.evaluate([Xt_eval, Xclin_eval[:,:max_codes], Xther_eval[:,:max_codes]], y_eval))
+    print(best_models.evaluate([Xt_eval_Wales, Xclin_eval_Wales[:,:max_codes], Xther_eval_Wales[:,:max_codes]], y_eval_Wales))
+    print(best_models.evaluate([Xt_eval_Scotland, Xclin_eval_Scotland[:,:max_codes], Xther_eval_Scotland[:,:max_codes]], y_eval_Scotland))

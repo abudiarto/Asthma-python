@@ -27,7 +27,7 @@ clinical = clinical['f_clinical_part']
 clinical = clinical.dropna(subset=['code_id'])
 clinical['event_date'] = pd.to_datetime(clinical['event_date'])
 clinical = clinical.loc[(clinical['event_date'] >= '2016-01-01') & (clinical['event_date'] < '2018-01-01')]
-clinical = clinical[clinical.code_id.isin(target_readcode.readcodes.values)]
+# clinical = clinical[clinical.code_id.isin(target_readcode.readcodes.values)]
 clinical = clinical.merge(patient[['patid', 'Country']], on='patid', how='left')
 clinical = clinical[['patid', 'code_id', 'Country']]
 for file in clinical_files:
@@ -37,7 +37,7 @@ for file in clinical_files:
     temp = temp.dropna(subset=['code_id'])
     temp['event_date'] = pd.to_datetime(temp['event_date'])
     temp = temp.loc[(temp['event_date'] >= '2016-01-01') & (temp['event_date'] < '2018-01-01')]
-    temp = temp[temp.code_id.isin(target_readcode.readcodes.values)]
+    # temp = temp[temp.code_id.isin(target_readcode.readcodes.values)]
     temp = temp.merge(patient[['patid', 'Country']], on='patid', how='left')
     temp = temp[['patid', 'code_id', 'Country']]
     clinical = pd.concat([clinical, temp])
@@ -52,7 +52,7 @@ therapy = therapy['f_therapy_part']
 therapy = therapy.dropna(subset=['code_id'])
 therapy['event_date'] = pd.to_datetime(therapy['event_date'])
 therapy = therapy.loc[(therapy['event_date'] >= '2016-01-01') & (therapy['event_date'] < '2018-01-01')]
-therapy = therapy[therapy.code_id.isin(target_readcode.readcodes.values)]
+# therapy = therapy[therapy.code_id.isin(target_readcode.readcodes.values)]
 therapy = therapy.merge(patient[['patid', 'Country']], on='patid', how='left')
 therapy = therapy[['patid', 'code_id', 'Country']]
 for file in therapy_files:
@@ -62,29 +62,31 @@ for file in therapy_files:
     temp = temp.dropna(subset=['code_id'])
     temp['event_date'] = pd.to_datetime(temp['event_date'])
     temp = temp.loc[(temp['event_date'] >= '2016-01-01') & (temp['event_date'] < '2018-01-01')]
-    temp = temp[temp.code_id.isin(target_readcode.readcodes.values)]
+    # temp = temp[temp.code_id.isin(target_readcode.readcodes.values)]
     temp = temp.merge(patient[['patid', 'Country']], on='patid', how='left')
     temp = temp[['patid', 'code_id', 'Country']]
     therapy = pd.concat([therapy, temp])
     therapy.reset_index(drop=True, inplace=True)
 
     
-clinical = pd.pivot_table(data=clinical, values='patid', index='code_id', columns='Country', aggfunc='count')
+clinical = pd.pivot_table(data=clinical, values='patid', index='code_id', columns='Country', aggfunc=pd.Series.nunique)
 clinical = clinical[['England','Scotland','Wales']]
 clinical = clinical.fillna(0)
 clinical['%England'] = clinical.apply(lambda x: x.England/sum([x.England, x.Scotland, x.Wales])*100, axis=1)
 clinical['%Scotland'] = clinical.apply(lambda x: x.Scotland/sum([x.England, x.Scotland, x.Wales])*100, axis=1)
 clinical['%Wales'] = clinical.apply(lambda x: x.Wales/sum([x.England, x.Scotland, x.Wales])*100, axis=1)
-clinical.sort_values('%England', ascending=False)
+clinical['%patient'] = clinical.apply(lambda x: (sum([x.England, x.Scotland, x.Wales])/675260)*100, axis=1)
+clinical.sort_values('%patient', ascending=False)
 
 
-therapy = pd.pivot_table(data=therapy, values='patid', index='code_id', columns='Country', aggfunc='count')
+therapy = pd.pivot_table(data=therapy, values='patid', index='code_id', columns='Country', aggfunc=pd.Series.nunique)
 therapy = therapy[['England','Scotland','Wales']]
 therapy = therapy.fillna(0)
 therapy['%England'] = therapy.apply(lambda x: x.England/sum([x.England, x.Scotland, x.Wales])*100, axis=1)
 therapy['%Scotland'] = therapy.apply(lambda x: x.Scotland/sum([x.England, x.Scotland, x.Wales])*100, axis=1)
 therapy['%Wales'] = therapy.apply(lambda x: x.Wales/sum([x.England, x.Scotland, x.Wales])*100, axis=1)
-therapy.sort_values('%England', ascending=False)
+therapy['%patient'] = therapy.apply(lambda x: (sum([x.England, x.Scotland, x.Wales])/675260)*100, axis=1)
+therapy.sort_values('%patient', ascending=False)
 
-clinical.to_csv('../FinalData/pivotClinicalCodesbyCountry_specific.csv')
-therapy.to_csv('../FinalData/pivotTherapyCodesbyCountry_specific.csv')
+clinical.to_csv('../FinalData/pivotClinicalCodesbyCountry.csv')
+therapy.to_csv('../FinalData/pivotTherapyCodesbyCountry.csv')

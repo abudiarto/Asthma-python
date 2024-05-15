@@ -8,11 +8,13 @@ from tensorflow.keras.metrics import AUC, SensitivityAtSpecificity
 from tensorflow.keras.optimizers import Adam, Adagrad, RMSprop, Adamax, SGD, Adadelta
 from tensorflow.keras.initializers import Constant
 from tensorflow.keras.regularizers import L1L2, L1, L2
-from livelossplot import PlotLossesKeras
+# from livelossplot import PlotLossesKeras
 #internal validation
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix, classification_report, f1_score, balanced_accuracy_score, matthews_corrcoef, auc, average_precision_score, roc_auc_score, balanced_accuracy_score, roc_curve, accuracy_score
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+
+from sklearn.model_selection import KFold, StratifiedKFold
 
 import keras_tuner
 
@@ -23,27 +25,20 @@ import pandas as pd
 import pickle
 
 import time
-
 # fix random seed for reproducibility
 tf.random.set_seed(1234)
 
 
-trainingData, validationData, internalEvaluationData, evaluationData, evaluationDataWales, evaluationDataScotland = pickle.load(open('../FinalData/dataset_scaled_2vs1_09122023.sav', 'rb'))
+trainingData, _, _, _, _, _ = pickle.load(open('../FinalData/dataset_scaled_2vs1_09122023.sav', 'rb'))
 
-trainingData = trainingData[(trainingData.age >=8) & (trainingData.age <=80)]
-validationData = validationData[(validationData.age >=8) & (validationData.age <=80)]
-internalEvaluationData = internalEvaluationData[(internalEvaluationData.age >=8) & (internalEvaluationData.age <=80)]
-evaluationData = evaluationData[(evaluationData.age >=8) & (evaluationData.age <=80)]
-evaluationDataWales = evaluationDataWales[(evaluationDataWales.age >=8) & (evaluationDataWales.age <=80)]
-evaluationDataScotland = evaluationDataScotland[(evaluationDataScotland.age >=8) & (evaluationDataScotland.age <=80)]
+trainingData = trainingData[(trainingData.age >=18) & (trainingData.age <=80)]
+
+
 
 
 trainingData = trainingData.rename({'3MonthsOutcome': '3months', '6MonthsOutcome': '6months','9MonthsOutcome': '9months','12MonthsOutcome': '12months',}, axis=1)
-validationData = validationData.rename({'3MonthsOutcome': '3months', '6MonthsOutcome': '6months','9MonthsOutcome': '9months','12MonthsOutcome': '12months',}, axis=1)
-internalEvaluationData = internalEvaluationData.rename({'3MonthsOutcome': '3months', '6MonthsOutcome': '6months','9MonthsOutcome': '9months','12MonthsOutcome': '12months',}, axis=1)
-evaluationData = evaluationData.rename({'3MonthsOutcome': '3months', '6MonthsOutcome': '6months','9MonthsOutcome': '9months','12MonthsOutcome': '12months',}, axis=1)
-evaluationDataWales = evaluationDataWales.rename({'3MonthsOutcome': '3months', '6MonthsOutcome': '6months','9MonthsOutcome': '9months','12MonthsOutcome': '12months',}, axis=1)
-evaluationDataScotland = evaluationDataScotland.rename({'3MonthsOutcome': '3months', '6MonthsOutcome': '6months','9MonthsOutcome': '9months','12MonthsOutcome': '12months',}, axis=1)
+
+
 
 
 #Define feature candidates
@@ -84,26 +79,31 @@ print(features_columns)
 
 
 #load sequence
-clinical = pd.read_feather('../SeqModel/all_data_clinical_specific.feather')
-therapy = pd.read_feather('../SeqModel/all_data_therapy_specific.feather')
+# change this path whether to use sequence with full readcodes (~80,000 vocabs) or only asthma-related readcodes (~1500 vocabs)
+clinical = pd.read_feather('../SeqModel/all_data_clinical_new.feather')
+therapy = pd.read_feather('../SeqModel/all_data_therapy_new.feather')
 seqCols = ['patid',
-       'read_code_seq_padded_end_idx_clin',
+       'read_code_seq_padded_end_idx_new_clin',
        'month_padded_idx_end_clin',
-       'read_code_seq_padded_end_idx_ther',
+       'read_code_seq_padded_end_idx_new_ther',
        'month_padded_idx_end_ther']
-sequence_data = clinical.merge(therapy[['patid', 'read_code_seq_padded_idx', 'read_code_seq_padded_end_idx',
+
+sequence_data = clinical.merge(therapy[['patid', 'read_code_seq_padded_idx', 'read_code_seq_padded_end_idx_new',
        'month_padded_idx', 'month_padded_idx_end']], on='patid', suffixes=['_clin', '_ther'], how='inner')
 
-trainingData = trainingData.merge(sequence_data[seqCols], on='patid', how='inner')
-validationData = validationData.merge(sequence_data[seqCols], on='patid', how='inner')
-internalEvaluationData = internalEvaluationData.merge(sequence_data[seqCols], on='patid', how='inner')
-evaluationData = evaluationData.merge(sequence_data[seqCols], on='patid', how='inner')
-evaluationDataWales = evaluationDataWales.merge(sequence_data[seqCols], on='patid', how='inner')
-evaluationDataScotland = evaluationDataScotland.merge(sequence_data[seqCols], on='patid', how='inner')
+#free up memory
+clinical = []
+therapy = []
 
-#vocab
-code2idx_clin = pickle.load(open('../SeqModel/all_vocab_clinical_specific.sav', 'rb'))
-code2idx_ther = pickle.load(open('../SeqModel/all_vocab_therapy_specific.sav', 'rb'))
+trainingData = trainingData.merge(sequence_data[seqCols], on='patid', how='inner')
+
+
+print(trainingData.shape)
+
+
+#vocab - change this too, full readcodes (~80,000 vocabs) or only asthma-related readcodes (~1500 vocabs)
+code2idx_clin = pickle.load(open('../SeqModel/all_vocab_clinical_new.sav', 'rb'))
+code2idx_ther = pickle.load(open('../SeqModel/all_vocab_therapy_new.sav', 'rb'))
 month2idx = pickle.load(open('../SeqModel/all_vocab_month.sav', 'rb'))
 vocab_size_clinical = len(code2idx_clin)+1
 vocab_size_therapy = len(code2idx_ther)+1
@@ -112,74 +112,35 @@ print(vocab_size_clinical)
 print(vocab_size_therapy)
 print(month_size)
 
-Xt_train = np.array(trainingData[features_columns].values)
-Xt_val = np.array(validationData[features_columns].values)
-Xt_internaleval = np.array(internalEvaluationData[features_columns].values)
-Xt_eval = np.array(evaluationData[features_columns].values)
-Xt_eval_Wales = np.array(evaluationDataWales[features_columns].values)
-Xt_eval_Scotland = np.array(evaluationDataScotland[features_columns].values)
-
-#scalling tabular data
-scaler = StandardScaler().fit(Xt_train)
-Xt_train = scaler.transform(Xt_train)
-Xt_val = scaler.transform(Xt_val)
-Xt_internaleval = scaler.transform(Xt_internaleval)
-Xt_eval = scaler.transform(Xt_eval)
-Xt_eval_Wales = scaler.transform(Xt_eval_Wales)
-Xt_eval_Scotland = scaler.transform(Xt_eval_Scotland)
-
-Xclin_train = np.array(trainingData['read_code_seq_padded_end_idx_clin'].values)
-Xclin_val = np.array(validationData['read_code_seq_padded_end_idx_clin'].values)
-Xclin_internaleval = np.array(internalEvaluationData['read_code_seq_padded_end_idx_clin'].values)
-Xclin_eval = np.array(evaluationData['read_code_seq_padded_end_idx_clin'].values)
-Xclin_eval_Wales = np.array(evaluationDataWales['read_code_seq_padded_end_idx_clin'].values)
-Xclin_eval_Scotland = np.array(evaluationDataScotland['read_code_seq_padded_end_idx_clin'].values)
-Xclin_train = np.array([x for x in Xclin_train])
-Xclin_val = np.array([x for x in Xclin_val])
-Xclin_internaleval = np.array([x for x in Xclin_internaleval])
-Xclin_eval = np.array([x for x in Xclin_eval])
-Xclin_eval_Wales = np.array([x for x in Xclin_eval_Wales])
-Xclin_eval_Scotland = np.array([x for x in Xclin_eval_Scotland])
-
-Xther_train = np.array(trainingData['read_code_seq_padded_end_idx_ther'].values)
-Xther_val = np.array(validationData['read_code_seq_padded_end_idx_ther'].values)
-Xther_internaleval = np.array(internalEvaluationData['read_code_seq_padded_end_idx_ther'].values)
-Xther_eval = np.array(evaluationData['read_code_seq_padded_end_idx_ther'].values)
-Xther_eval_Wales = np.array(evaluationDataWales['read_code_seq_padded_end_idx_ther'].values)
-Xther_eval_Scotland = np.array(evaluationDataScotland['read_code_seq_padded_end_idx_ther'].values)
-Xther_train = np.array([x for x in Xther_train])
-Xther_val = np.array([x for x in Xther_val])
-Xther_internaleval = np.array([x for x in Xther_internaleval])
-Xther_eval = np.array([x for x in Xther_eval])
-Xther_eval_Wales = np.array([x for x in Xther_eval_Wales])
-Xther_eval_Scotland = np.array([x for x in Xther_eval_Scotland])
 
 
-print(Xt_train.shape)
-print(Xt_internaleval.shape)
-print(Xt_val.shape)
-print(Xt_eval.shape)
-print(Xt_eval_Wales.shape)
-print(Xt_eval_Scotland.shape)
+
+# use only 20% of training data for parameter search
+target_outcomes = '12months'
+ignore, cvData = train_test_split(trainingData, stratify=trainingData[target_outcomes], test_size=0.10, random_state=1234)
 
 
-target_outcome = '12months'
-y_train = trainingData[target_outcome].values
-y_val = validationData[target_outcome].values
-y_internaleval = internalEvaluationData[target_outcome].values
-y_eval = evaluationData[target_outcome].values
-y_eval_Wales = evaluationDataWales[target_outcome].values
-y_eval_Scotland = evaluationDataScotland[target_outcome].values
+Xt = np.array(cvData[features_columns].values)
+scaler = StandardScaler().fit(Xt)
+Xt = scaler.transform(Xt)
+Xclin = np.array(cvData['read_code_seq_padded_end_idx_new_clin'].values)
+Xther = np.array(cvData['read_code_seq_padded_end_idx_new_ther'].values)
+
+Xclin = np.array([x for x in Xclin])
+Xther = np.array([x for x in Xther])
+
+y = cvData[target_outcomes].values
+
+print(Xt.shape)
+print(y.shape)
 
 
-max_codes_clin = Xclin_train.shape[1]
-max_codes_ther = Xther_train.shape[1]
+
+#for all data max_codes=100, for specific asthma code max_codes=25
 max_codes = 100
-tab_feature_size = Xt_train.shape[1]
-top_vocabs_portion = .1
-
-print(max_codes_clin)
-print(max_codes_ther)
+tab_feature_size = Xt.shape[1]
+set_vocab = '50%'
+top_vocabs_portion = .5
 
 hp = keras_tuner.HyperParameters()
 class MyHyperModel_allParams(keras_tuner.HyperModel):
@@ -342,72 +303,80 @@ class MyHyperModel_allParams(keras_tuner.HyperModel):
             **kwargs,
         )
     
-start_time = time.time()
+def get_model_name(k):
+    return str(k)+'.h5'
 
-#run tuner
-earlyStopping = EarlyStopping(monitor='val_auc', patience=5, verbose=0, mode='max', restore_best_weights=True)
-pos_weight = trainingData[target_outcome].value_counts()[0]/trainingData[target_outcome].value_counts()[1]
-class_weight = {0:1, 1:pos_weight}
+#extract best modedl from tuner
+hp = keras_tuner.HyperParameters()
 
-#free up memory
-sequence_data = []
+model = MyHyperModel_allParams()
+tuner = keras_tuner.BayesianOptimization(
+    hypermodel= model,
+    objective=keras_tuner.Objective("val_auc", direction="max"),
+    max_trials=20,
+    overwrite=False,
+    seed = 1234,
+    directory='../SeqModel/tuner/',
+    project_name="lstmv2.0AllParams1-bayesian-deeper-18+_"+set_vocab,
+)
 
-with tf.device('/GPU:0'):
-    model = MyHyperModel_allParams()
-    tuner = keras_tuner.BayesianOptimization(
-        hypermodel= model,
-        objective=keras_tuner.Objective("val_auc", direction="max"),
-        max_trials=15,
-        overwrite=False,
-        seed=1234,
-        directory='../SeqModel/tuner/',
-        project_name="lstmv2.0AllParams1-bayesian-deeper",
-    )
+
+#initialise cross val split
+n_splits = 10
+skf = StratifiedKFold(n_splits = n_splits, random_state = 1234, shuffle = True) 
+
+VALIDATION_ACCURACY = []
+VALIDATION_LOSS = []
+
+fold_var = 1
+n = Xt.shape[0]
+
+for train_index, val_index in skf.split(np.zeros(n),y):
+    print('Fold: ', fold_var)
+    Xt_train = np.array([Xt[i] for i in train_index])
+    Xt_val = np.array([Xt[i] for i in val_index])
+    print(len(Xt_train))
+    print(len(Xt_val))
     
-best_models = tuner.get_best_models(num_models=1)[0]
-print(best_models.summary())
-earlyStopping = EarlyStopping(monitor='val_auc', patience=20, verbose=0, mode='max', restore_best_weights=True)
-mcp_save = ModelCheckpoint('../SeqModel/lstmv2.0AllParams1-bayesian-deeper-specific.weights.hdf5', save_best_only=True, monitor='val_auc', mode='max')
-history = best_models.fit([Xt_train, Xclin_train[:,:max_codes], Xther_train[:,:max_codes]], y_train, 
-                 validation_data=([Xt_val, Xclin_val[:,:max_codes], Xther_val[:,:max_codes]], y_val),
-                          epochs=200, batch_size=128, class_weight=class_weight, callbacks = [earlyStopping])
+    Xclin_train = np.array([Xclin[i] for i in train_index])
+    Xclin_val = np.array([Xclin[i] for i in val_index])
+    print(len(Xclin_train))
+    print(len(Xclin_val))
+    
+    Xther_train = np.array([Xther[i] for i in train_index])
+    Xther_val = np.array([Xther[i] for i in val_index])
+    print(len(Xther_train))
+    print(len(Xther_val))
+    
+    y_train = np.array([y[i] for i in train_index])
+    y_val = np.array([y[i] for i in val_index])
+    print(len(y_train))
+    print(len(y_val))
+    
+    #call best model from tuner
+    best_models = tuner.get_best_models(num_models=1)[0]
+    
+    print(best_models.summary())
+    earlyStopping = EarlyStopping(monitor='val_auc', patience=5, verbose=0, mode='max', restore_best_weights=True)
+    mcp_save = ModelCheckpoint('../SeqModel/lstm_CV_18+_'+set_vocab+str(fold_var)+'.h5', save_best_only=True, monitor='val_auc', mode='max')
+    pos_weight = trainingData[target_outcomes].value_counts()[0]/trainingData[target_outcomes].value_counts()[1]
+    class_weight = {0:1, 1:pos_weight}
+    
+    
+    history = best_models.fit([Xt_train, Xclin_train[:,:max_codes], Xther_train[:,:max_codes]], y_train,
+                              validation_split = 0.2,
+                              epochs=10, batch_size=128, class_weight=class_weight, callbacks = [earlyStopping, mcp_save])
+    
+    
+    # LOAD BEST MODEL to evaluate the performance of the model
+    best_models.load_weights('../SeqModel/lstm_CV_18+_'+set_vocab+str(fold_var)+".h5")
+    results = best_models.evaluate([Xt_val, Xclin_val[:,:max_codes], Xther_val[:,:max_codes]], y_val)
+    results = dict(zip(best_models.metrics_names,results))
+    VALIDATION_ACCURACY.append(results['auc'])
+    VALIDATION_LOSS.append(results['loss'])
+    tf.keras.backend.clear_session()
+    fold_var += 1
+    
+pickle.dump([VALIDATION_ACCURACY, VALIDATION_LOSS], open('../SeqModel/CV_result_lstm_18+_'+ set_vocab + '.sav', 'wb'))
 
-pickle.dump(history, open('../SeqModel/history_lstmv2.0AllParams1-bayesian-deeper.sav', 'wb'))
-# list all data in history
-print(history.history.keys())
-# summarize history for accuracy
-plt.plot(history.history['auc'])
-plt.plot(history.history['val_auc'])
-plt.title('model AUC')
-plt.ylabel('AUC')
-plt.xlabel('epoch')
-plt.legend(['train', 'test'], loc='upper left')
-# plt.show()
-plt.savefig('../SeqModel/val_auc_LSTM_bayesian-deeper.png')
 
-# summarize history for loss
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.title('model loss')
-# plt.ylim(0.3, 1)
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.legend(['train', 'val'], loc='upper left')
-# plt.show()
-plt.savefig('../SeqModel/val_loss_LSTM_bayesian-deeper.png')
-
-plt.plot(history.history['auprc'])
-plt.plot(history.history['val_auprc'])
-plt.title('model auprc')
-# plt.ylim(0.3, 1)
-plt.ylabel('auprc')
-plt.xlabel('epoch')
-plt.legend(['train', 'val'], loc='upper left')
-# plt.show()
-plt.savefig('../SeqModel/val_auprc_LSTM_bayesian-deeper.png')
-
-with tf.device('/GPU:0'):
-    print(best_models.evaluate([Xt_internaleval, Xclin_internaleval[:,:max_codes], Xther_internaleval[:,:max_codes]], y_internaleval))
-    print(best_models.evaluate([Xt_eval, Xclin_eval[:,:max_codes], Xther_eval[:,:max_codes]], y_eval))
-    print(best_models.evaluate([Xt_eval_Wales, Xclin_eval_Wales[:,:max_codes], Xther_eval_Wales[:,:max_codes]], y_eval_Wales))
-    print(best_models.evaluate([Xt_eval_Scotland, Xclin_eval_Scotland[:,:max_codes], Xther_eval_Scotland[:,:max_codes]], y_eval_Scotland))

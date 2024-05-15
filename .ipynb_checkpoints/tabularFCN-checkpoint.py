@@ -61,7 +61,6 @@ print(X_eval_Scotland.shape)
 
 target_outcomes = ['12months'] 
 
-%%time
 
 # create the model
 y = trainingData[target_outcomes[0]].values
